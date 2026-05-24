@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Code Refine — Smart Code Review</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/effects.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <!-- Syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-theme"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+
+  <!-- CUSTOM CURSOR -->
+  <div id="cursor-dot"  aria-hidden="true"></div>
+  <div id="cursor-ring" aria-hidden="true"></div>
+
+  <!-- ANIMATED BACKGROUND CANVAS -->
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">&lt;/&gt;</div>
+    <div class="header-text">
+      <h1>AI Code Refine</h1>
+      <p>Bug detection · Auto-fix · Security · Real-time explanations</p>
+    </div>
+    <div class="header-actions">
+      <div class="badges">
+        <span>Python</span><span>JS</span><span>Java</span><span>C++</span><span>Go</span>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle theme" aria-label="Toggle dark/light theme">🌙</button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- INPUT PANEL -->
+    <div class="card" id="input-card">
+      <div class="card-toolbar">
+        <div class="dots">
+          <span style="background:#ff5f57"></span>
+          <span style="background:#febc2e"></span>
+          <span style="background:#28c840"></span>
+        </div>
+        <select id="language" aria-label="Select programming language">
+          <option>Python</option>
+          <option>JavaScript</option>
+          <option>TypeScript</option>
+          <option>Java</option>
+          <option>C</option>
+          <option>C++</option>
+          <option>Go</option>
+          <option>Rust</option>
+          <option>PHP</option>
+          <option>Ruby</option>
+          <option>Swift</option>
+          <option>Kotlin</option>
+          <option>SQL</option>
+          <option>Bash</option>
+        </select>
+
+        <select id="review-mode" aria-label="Select review mode">
+          <option value="deep">🔍 Deep Review</option>
+          <option value="quick">⚡ Quick Review</option>
+          <option value="security">🔒 Security Audit</option>
+        </select>
+
+        <span class="hint">Paste code or drop a file</span>
+
+        <label class="upload-btn" title="Upload a code file" aria-label="Upload code file">
+          📁
+          <input type="file" id="file-upload" accept=".py,.js,.ts,.java,.c,.cpp,.go,.rs,.php,.rb,.swift,.kt,.sql,.sh,.txt" style="display:none"/>
+        </label>
+      </div>
+
+      <!-- Drop zone overlay -->
+      <div id="drop-overlay" class="drop-overlay hidden" aria-hidden="true">
+        <div class="drop-message">📂 Drop your file here</div>
+      </div>
+
+      <div class="textarea-wrapper">
+        <textarea
+          id="code-input"
+          placeholder="# Paste your code here or drop a file...&#10;# Example:&#10;def divide(a, b):&#10;    return a / b&#10;&#10;result = divide(10, 0)&#10;print(result)"
+          spellcheck="false"
+          aria-label="Code input area"
+        ></textarea>
+        <button class="clear-btn hidden" id="clear-btn" title="Clear code" aria-label="Clear code input">✕</button>
+      </div>
+
+      <div class="card-footer">
+        <div class="code-stats">
+          <span id="line-count" class="stat-badge"></span>
+          <span id="char-count" class="stat-badge"></span>
+        </div>
+        <div class="footer-actions">
+          <span class="shortcut-hint">Ctrl+Enter to analyze</span>
+          <button id="analyze-btn" onclick="analyzeCode()">✦ Refine Code</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOADER -->
+    <div id="loader" class="hidden" role="status" aria-live="polite">
+      <div class="spinner"></div>
+      <!-- Fancy multi-ring loader (replaces spinner via CSS) -->
+      <div class="fancy-loader" aria-hidden="true">
+        <div class="ring ring-1"></div>
+        <div class="ring ring-2"></div>
+        <div class="ring ring-3"></div>
+        <div class="ring-dot"></div>
+      </div>
+      <div class="loader-text">
+        <span id="loader-msg">Analyzing your code...</span>
+        <div class="loader-steps">
+          <span class="step active" id="step-1">Parsing</span>
+          <span class="step-sep">→</span>
+          <span class="step" id="step-2">Reviewing</span>
+          <span class="step-sep">→</span>
+          <span class="step" id="step-3">Generating fix</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ERROR -->
+    <div id="error-box" class="hidden error-box" role="alert"></div>
+
+    <!-- RESULTS -->
+    <div id="results" class="hidden">
+
+      <!-- Score + Summary Bar -->
+      <div class="card score-card" id="score-card">
+        <div class="score-layout">
+          <div class="score-gauge-wrap">
+            <svg class="score-gauge" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="gauge-bg" cx="60" cy="60" r="50" />
+              <circle class="gauge-fill" id="gauge-fill" cx="60" cy="60" r="50"
+                stroke-dasharray="314" stroke-dashoffset="314" />
+            </svg>
+            <div class="score-number" id="score-number">0</div>
+            <div class="score-label" id="score-label">Score</div>
+          </div>
+          <div class="score-info">
+            <div class="score-grade" id="score-grade">—</div>
+            <p class="score-summary" id="score-summary"></p>
+            <div class="issue-counts" id="issue-counts"></div>
+          </div>
+          <div class="score-actions">
+            <button class="action-btn" onclick="exportJSON()" title="Export results as JSON">⬇ Export JSON</button>
+            <button class="action-btn" onclick="copyShareLink()" title="Copy shareable summary">🔗 Share</button>
+            <button class="action-btn" onclick="showHistory()" title="View review history">🕑 History</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Issues -->
+      <div class="card" id="issues-card">
+        <div class="card-header" id="issues-header">
+          <span id="issues-icon">⚠</span>
+          <span id="issues-title">Issues Found</span>
+          <div class="filter-pills" id="filter-pills" style="margin-left:auto;display:flex;gap:6px;"></div>
+        </div>
+        <div id="issues-list" class="card-body"></div>
+      </div>
+
+      <!-- Code Comparison -->
+      <div class="code-compare">
+        <div class="code-block">
+          <div class="code-label red">
+            <span>ORIGINAL CODE</span>
+            <div style="display:flex;gap:6px;">
+              <button class="copy-btn" onclick="copyCode('original-code')">Copy</button>
+            </div>
+          </div>
+          <pre><code id="original-code" class="hljs"></code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-label green">
+            <span>FIXED CODE</span>
+            <div style="display:flex;gap:6px;">
+              <button class="copy-btn" onclick="copyCode('fixed-code')">Copy</button>
+            </div>
+          </div>
+          <pre><code id="fixed-code" class="hljs"></code></pre>
+        </div>
+      </div>
+
+      <!-- Explanation -->
+      <div class="card">
+        <div class="card-header blue">
+          <span>💡</span>
+          <span>Explanation</span>
+        </div>
+        <div class="card-body">
+          <p id="explanation"></p>
+        </div>
+      </div>
+
+      <!-- Suggestions -->
+      <div class="card" id="suggestions-card">
+        <div class="card-header purple">
+          <span>🚀</span>
+          <span>Improvement Suggestions</span>
+        </div>
+        <div class="card-body" id="suggestions-body"></div>
+      </div>
+
+      <!-- Test Cases -->
+      <div class="card" id="test-cases-card">
+        <div class="card-header teal">
+          <span>🧪</span>
+          <span>Suggested Test Cases</span>
+        </div>
+        <div class="card-body" id="test-cases-body"></div>
+      </div>
+
+    </div>
+
+    <!-- HISTORY PANEL -->
+    <div id="history-panel" class="history-panel hidden" role="dialog" aria-label="Review history">
+      <div class="history-header">
+        <span>🕑 Review History</span>
+        <button onclick="closeHistory()" aria-label="Close history">✕</button>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </div>
+
+  </main>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
